@@ -100,13 +100,20 @@ const PendingOrdersPage = () => {
   ];
 
   const overFourDaysCount = list.records.filter((r) => daysSince(r.order_date) > 4).length;
+  const totalOrders = list.records.length;
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800 flex items-center">
           <FiClock className="mr-2 text-yellow-500" />
-          Pending Orders
+          Pending Orders{' '}
+          {totalOrders > 0 && (
+            <span className="ml-4 text-gray-600 w-12 h-12 border flex justify-center items-center rounded-full p-">
+              {' '}
+              {totalOrders}{' '}
+            </span>
+          )}
         </h2>
         <button
           onClick={list.refetch}

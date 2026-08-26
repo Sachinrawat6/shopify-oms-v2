@@ -96,11 +96,17 @@ const ConfirmedOrdersPage = () => {
     const standard = list.records.filter((order) => {
       const totalAmount = order.price * order.quantity;
       const isExpressShipping = order.shipping_method?.toLowerCase().includes('express');
+      const isHoldOrders = order.source?.toLowerCase().includes('shopify_draft_order');
 
-      return totalAmount <= 5000 && !isExpressShipping;
+      return totalAmount <= 5000 && !isExpressShipping && !isHoldOrders;
     });
 
-    return { express, standard };
+    // Hold orders : with source shopify_draft_order
+    const holdOrders = list.records.filter((order) => {
+      return order.source?.toLocaleString().includes('shopify_draft_order');
+    });
+
+    return { express, standard, holdOrders };
   }, [list.records]);
 
   // Group orders by order_id for PDF
@@ -130,46 +136,113 @@ const ConfirmedOrdersPage = () => {
       (a.styleNumber || '').toString().localeCompare((b.styleNumber || '').toString())
     );
 
-    return sortedOrders.map((order) => ({
-      'Sku Id': `${order.styleNumber || ''}-other-${order.size || ''}`,
-      'Rack Space': 'Default',
-      Good: '1',
-    }));
-  };
+    const csvData = [];
 
+    sortedOrders.forEach((order) => {
+      const quantity = order.quantity || 0;
+      const skuId = `${order.styleNumber || ''}-other-${order.size || ''}`;
+
+      // Add row for each quantity
+      for (let i = 0; i < quantity; i++) {
+        csvData.push({
+          'Sku Id': skuId,
+          'Rack Space': 'Default',
+          Good: 1, // or order.quantity if you want the total
+        });
+      }
+    });
+
+    return csvData;
+  };
   // Generate PDF
+
   const generatePDF = (orders, type) => {
-    if (!orders || orders.length === 0) {
+    // Early validation
+    if (!orders?.length) {
       toast.warning(`No ${type} orders to export`);
       return;
     }
 
     setExporting(true);
+
     try {
       const doc = new jsPDF('p', 'pt', 'a4');
       const pageWidth = doc.internal.pageSize.width;
-      let srNo = 1;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 40;
+      const startY = 80;
 
-      // Add header
-      doc.setFontSize(20);
-      doc.setTextColor(40, 40, 40);
-      doc.setFont(undefined, 'bold');
-      doc.text(`${type} Orders Report`, pageWidth / 2, 40, { align: 'center' });
+      // ----- HEADER SECTION -----
+      const addHeader = (doc) => {
+        // Main title
+        doc.setFontSize(22);
+        doc.setTextColor(40, 40, 40);
+        doc.setFont(undefined, 'bold');
+        doc.text(`${type} Orders Report`, pageWidth / 2, 40, { align: 'center' });
 
-      doc.setFont(undefined, 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, 60, { align: 'center' });
+        // Subtitle with timestamp
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(
+          `Generated: ${new Date().toLocaleString('en-IN', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          })}`,
+          pageWidth / 2,
+          60,
+          { align: 'center' }
+        );
 
-      // Group and sort orders by order_id
+        // Total orders count
+        doc.setFontSize(10);
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Total Orders: ${orders.length}`, pageWidth - margin, 70, { align: 'right' });
+      };
+
+      addHeader(doc);
+
+      // ----- DATA PROCESSING -----
+      const normalizeDate = (date) => {
+        if (!date) return 'N/A';
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return 'N/A';
+
+        return d.toLocaleString('en-IN', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+      };
+
+      // Group and sort orders
       const groupedOrders = groupOrdersByOrderId(orders);
-      groupedOrders.sort((a, b) => a.order_id?.localeCompare(b.order_id || '') || 0);
+      groupedOrders.sort((a, b) => (a.order_id || '').localeCompare(b.order_id || ''));
 
       // Prepare table data
       const tableData = [];
+      let srNo = 1;
 
-      groupedOrders.forEach((group) => {
-        // Add items directly without header rows
+      groupedOrders.forEach((group, index) => {
+        // Add order header row (optional - commented out)
+        // You can uncomment if you want order grouping visible
+        /*
+      if (group.items.length > 0) {
+        tableData.push([
+          { content: `Order #${group.order_id}`, colSpan: 9, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }
+        ]);
+      }
+      */
+
+        // Add items
         group.items.forEach((item) => {
           const total = (item.price || 0) * (item.quantity || 0);
           tableData.push([
@@ -178,80 +251,123 @@ const ConfirmedOrdersPage = () => {
             item.styleNumber || 'N/A',
             item.size || 'N/A',
             item.quantity || 0,
-            `₹${total.toFixed(2)}`,
-            group.contact_number || 'N/A',
-            group.customer_name || 'N/A',
+            `${total.toFixed(2)}`,
+            item.shipping_method || 'N/A',
+            item.payment_type || 'N/A',
+            normalizeDate(item.order_date),
           ]);
         });
 
-        // Add separator row between orders
-        if (groupedOrders.indexOf(group) < groupedOrders.length - 1) {
+        // Add separator between order groups (except after last)
+        if (index < groupedOrders.length - 1 && tableData.length > 0) {
           tableData.push([
-            { content: '', colSpan: 8, styles: { fillColor: [255, 255, 255], minCellHeight: 5 } },
+            { content: '', colSpan: 9, styles: { fillColor: [255, 255, 255], minCellHeight: 8 } },
           ]);
         }
       });
 
-      // Add table
-      autoTable(doc, {
-        startY: 80,
-        head: [['Sr.', 'Order ID', 'Style No.', 'Size', 'Qty', 'Total', 'Phone', 'Customer']],
+      // ----- TABLE CONFIGURATION -----
+      const tableConfig = {
+        startY: startY,
+        head: [
+          [
+            'Sr.',
+            'Order ID',
+            'Style No.',
+            'Size',
+            'Qty',
+            'Total',
+            'Shipping M.',
+            'Payment Type',
+            'Order Date',
+          ],
+        ],
         body: tableData,
         theme: 'striped',
+        styles: {
+          fontSize: 8,
+          cellPadding: 4,
+          lineColor: [200, 200, 200],
+          lineWidth: 0.5,
+        },
         headStyles: {
           fillColor: [52, 73, 94],
           textColor: [255, 255, 255],
           fontStyle: 'bold',
           fontSize: 9,
           halign: 'center',
+          cellPadding: 6,
         },
         bodyStyles: {
-          fontSize: 8,
           textColor: [40, 40, 40],
+          fontSize: 8,
+        },
+        alternateRowStyles: {
+          fillColor: [245, 247, 250],
         },
         columnStyles: {
-          0: { cellWidth: 30, halign: 'center' },
-          1: { cellWidth: 65, halign: 'center' },
+          0: { cellWidth: 25, halign: 'center' },
+          1: { cellWidth: 60, halign: 'center' },
           2: { cellWidth: 55, halign: 'center' },
-          3: { cellWidth: 40, halign: 'center' },
+          3: { cellWidth: 35, halign: 'center' },
           4: { cellWidth: 30, halign: 'center' },
           5: { cellWidth: 55, halign: 'right' },
           6: { cellWidth: 65, halign: 'center' },
-          7: { cellWidth: 80, halign: 'left' },
+          7: { cellWidth: 75, halign: 'left' },
+          8: { cellWidth: 85, halign: 'left' },
         },
-        margin: { left: 30, right: 30 },
-        tableWidth: pageWidth - 60,
+        margin: { left: margin, right: margin },
+        tableWidth: pageWidth - margin * 2,
+
+        // Footer
         didDrawPage: (data) => {
-          // Footer on each page
           const pageCount = doc.internal.getNumberOfPages();
           for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
+
+            // Footer line
+            doc.setDrawColor(200, 200, 200);
+            doc.line(margin, pageHeight - 30, pageWidth - margin, pageHeight - 30);
+
+            // Footer text
             doc.setFontSize(8);
             doc.setTextColor(150, 150, 150);
             doc.text(
-              `Page ${i} of ${pageCount} | ${type} Orders Report`,
+              `Page ${i} of ${pageCount} | ${type} Orders Report | Generated: ${new Date().toISOString().split('T')[0]}`,
               pageWidth / 2,
-              doc.internal.pageSize.height - 20,
+              pageHeight - 15,
               { align: 'center' }
             );
           }
         },
-      });
+      };
 
-      doc.save(
-        `${type.toLowerCase().replace(/\s+/g, '_')}_orders_${new Date().toISOString().split('T')[0]}.pdf`
-      );
+      // Generate table
+      autoTable(doc, tableConfig);
+
+      // ----- SAVE PDF -----
+      const fileName = `${type.toLowerCase().replace(/\s+/g, '_')}_orders_${
+        new Date().toISOString().split('T')[0]
+      }.pdf`;
+
+      doc.save(fileName);
       toast.success(`${orders.length} ${type} orders exported successfully!`);
     } catch (error) {
       console.error('PDF generation error:', error);
-      toast.error('Error generating PDF: ' + error.message);
+      toast.error(`Error generating PDF: ${error.message}`);
     } finally {
       setExporting(false);
     }
   };
 
   const exportAllOrders = (type) => {
-    const orders = type === 'Express' ? filteredOrders.express : filteredOrders.standard;
+    // const orders = type === 'Express' ? filteredOrders.express : filteredOrders.standard;
+    const orders =
+      type === 'Express'
+        ? filteredOrders.express
+        : type === 'Hold'
+          ? filteredOrders.holdOrders
+          : filteredOrders.standard;
     generatePDF(orders, type);
   };
 
@@ -367,7 +483,7 @@ const ConfirmedOrdersPage = () => {
 
       {/* Stats Cards */}
       {!list.loading && list.records.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -405,20 +521,37 @@ const ConfirmedOrdersPage = () => {
               </div>
             </div>
           </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Hold Orders</p>
+                <p className="text-2xl font-semibold text-gray-800">
+                  {filteredOrders.holdOrders.length}
+                </p>
+              </div>
+              <div className="p-2 bg-orange-50 rounded-lg border border-orange-200">
+                <FiFile className="text-orange-600" />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Export Buttons */}
       {!list.loading && list.records.length > 0 && (
-        <div className="flex flex-wrap gap-3 mb-6">
+        <div className="flex justify-between flex-wrap items-center gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          {/* Express Orders */}
           <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">
+              Express
+            </span>
             <button
               onClick={() => exportAllOrders('Express')}
               disabled={exporting || filteredOrders.express.length === 0}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors duration-200 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 hover:border-purple-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1"
             >
-              <FiPrinter />
-              Export Express PDF
+              <FiPrinter className="w-4 h-4" />
+              PDF
             </button>
             <button
               onClick={() => {
@@ -426,21 +559,28 @@ const ConfirmedOrdersPage = () => {
                 downloadCSV(data, `express_orders_${new Date().toISOString().split('T')[0]}.csv`);
               }}
               disabled={filteredOrders.express.length === 0}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-700 rounded-lg hover:bg-purple-800 transition-colors duration-200 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-md hover:bg-purple-100 hover:border-purple-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1"
             >
-              <FiDownload />
-              Export Express CSV
+              <FiDownload className="w-4 h-4" />
+              CSV
             </button>
           </div>
 
+          {/* Divider */}
+          <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
+
+          {/* Standard Orders */}
           <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">
+              Standard
+            </span>
             <button
               onClick={() => exportAllOrders('Standard')}
               disabled={exporting || filteredOrders.standard.length === 0}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors duration-200 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-md hover:bg-orange-100 hover:border-orange-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1"
             >
-              <FiPrinter />
-              Export Standard PDF
+              <FiPrinter className="w-4 h-4" />
+              PDF
             </button>
             <button
               onClick={() => {
@@ -448,10 +588,39 @@ const ConfirmedOrdersPage = () => {
                 downloadCSV(data, `standard_orders_${new Date().toISOString().split('T')[0]}.csv`);
               }}
               disabled={filteredOrders.standard.length === 0}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-700 rounded-lg hover:bg-orange-800 transition-colors duration-200 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-md hover:bg-orange-100 hover:border-orange-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1"
             >
-              <FiDownload />
-              Export Standard CSV
+              <FiDownload className="w-4 h-4" />
+              CSV
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
+
+          {/* Hold Orders */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">
+              Hold
+            </span>
+            <button
+              onClick={() => exportAllOrders('Hold')}
+              disabled={exporting || filteredOrders.holdOrders.length === 0}
+              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 hover:border-blue-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            >
+              <FiPrinter className="w-4 h-4" />
+              PDF
+            </button>
+            <button
+              onClick={() => {
+                const data = generateCSVData(filteredOrders.holdOrders);
+                downloadCSV(data, `hold_orders_${new Date().toISOString().split('T')[0]}.csv`);
+              }}
+              disabled={filteredOrders.holdOrders.length === 0}
+              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 hover:border-blue-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            >
+              <FiDownload className="w-4 h-4" />
+              CSV
             </button>
           </div>
         </div>

@@ -61,3 +61,8 @@ export const blockCustomer = async (order_id) => {
   const response = await apiClient.post(`/orders/voided/block`, { order_id });
   return response.data;
 };
+
+export const moveHoldOrdersToProcessed = async (ids) => {
+  const response = await apiClient.post('/orders/hold/move-to-processed', { ids });
+  return response.data;
+};
