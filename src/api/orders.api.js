@@ -66,3 +66,18 @@ export const moveHoldOrdersToProcessed = async (ids) => {
   const response = await apiClient.post('/orders/hold/move-to-processed', { ids });
   return response.data;
 };
+
+export const fetchRefundFailedOrders = async (days) => {
+  const response = await apiClient.get(`refund-orders/non-refund?order_days=${days}`);
+  return response.data;
+};
+
+export const fetchPaymentPendingOrExpiredOrders = async () => {
+  const response = await apiClient.get(`/orders/payment-pending`);
+  return response.data;
+};
+
+export const updateCustomerContacted = async (id) => {
+  const response = await apiClient.patch(`/orders/payment-pending/${id}`);
+  return response.data;
+};

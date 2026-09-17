@@ -11,6 +11,10 @@ import BlacklistedCustomersPage from './pages/BlacklistedCustomersPage';
 import BlacklistedOrdersPage from './pages/BlacklistedOrdersPage';
 import DashboardPage from './pages/DashboardPage';
 import ProcessedOrdersPage from './pages/ProcessedOrdersPage';
+import RefundFailed from './pages/RefundFailed';
+import RefundedOrders from './pages/RefundedOrders';
+import SalesSummaryPage from './pages/SalesReport';
+import PaymentPendingOrders from './pages/PaymentPendingOrders';
 
 const App = () => (
   <BrowserRouter>
@@ -28,6 +32,11 @@ const App = () => (
         <Route path="/blacklisted-orders" element={<BlacklistedOrdersPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/processed" element={<ProcessedOrdersPage />} />
+        <Route path="/refund-failed" element={<RefundFailed />} />
+        <Route path="/refund-orders" element={<RefundedOrders />} />
+        <Route path="/sales" element={<SalesSummaryPage />} />
+        <Route path="/payment-pending-orders" element={<PaymentPendingOrders />} />
+
         <Route path="*" element={<Navigate to="/upload" replace />} />
       </Route>
     </Routes>
