@@ -81,3 +81,12 @@ export const updateCustomerContacted = async (id) => {
   const response = await apiClient.patch(`/orders/payment-pending/${id}`);
   return response.data;
 };
+
+// payment pending to confirm orders
+export const markPaymentPendingToConfirmOrders = async (payload, status) => {
+  const response = await apiClient.post(`/orders/payment-pending-confirm`, {
+    orders: [payload],
+    status,
+  });
+  return response.data;
+};

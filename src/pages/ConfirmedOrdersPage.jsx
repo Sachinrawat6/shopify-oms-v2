@@ -98,7 +98,8 @@ const ConfirmedOrdersPage = () => {
       const isExpressShipping = order.shipping_method?.toLowerCase().includes('express');
       const isHoldOrders = order.source?.toLowerCase().includes('shopify_draft_order');
 
-      return totalAmount <= 5000 && !isExpressShipping && !isHoldOrders;
+      // return totalAmount <= 5000 && !isExpressShipping && !isHoldOrders;
+      return !isExpressShipping && !isHoldOrders;
     });
 
     // Hold orders : with source shopify_draft_order

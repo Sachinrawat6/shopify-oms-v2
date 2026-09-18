@@ -40,7 +40,7 @@ export const NAV_ITEMS = [
   { path: '/refund-failed', label: 'Refund Failed', icon: 'x', category: 'customer-service' },
   {
     path: '/refund-orders',
-    label: 'Refund Orders',
+    label: 'Refunded Orders',
     icon: 'check-circle',
     category: 'customer-service',
   },
