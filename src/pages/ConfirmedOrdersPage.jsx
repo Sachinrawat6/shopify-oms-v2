@@ -81,7 +81,8 @@ const ConfirmedOrdersPage = () => {
 
   // Filter orders based on criteria
   const filteredOrders = useMemo(() => {
-    if (!list.records || list.records.length === 0) return { express: [], standard: [] };
+    if (!list.records || list.records.length === 0)
+      return { express: [], standard: [], holdOrders: [] };
 
     // Express: (Prepaid AND amount > 5000) OR Express shipping
     const express = list.records.filter((order) => {
@@ -92,19 +93,30 @@ const ConfirmedOrdersPage = () => {
       return (isPrepaid && totalAmount > 5000) || isExpressShipping;
     });
 
-    // Standard: amount <= 5000 AND NOT Express shipping
+    // Hold orders: source contains shopify_draft_order
+    const holdOrders = list.records.filter((order) => {
+      return order.source?.toLowerCase().includes('shopify_draft_order');
+    });
+
+    // Standard:
+    //  - NOT a hold order
+    //  - NOT express shipping
+    //  - If prepaid -> amount <= 5000 (not >= 5000)
+    //  - If COD -> any amount allowed
     const standard = list.records.filter((order) => {
       const totalAmount = order.price * order.quantity;
       const isExpressShipping = order.shipping_method?.toLowerCase().includes('express');
-      const isHoldOrders = order.source?.toLowerCase().includes('shopify_draft_order');
+      const isHoldOrder = order.source?.toLowerCase().includes('shopify_draft_order');
+      const isPrepaid = order.payment_type?.toLowerCase() === 'prepaid';
 
-      // return totalAmount <= 5000 && !isExpressShipping && !isHoldOrders;
-      return !isExpressShipping && !isHoldOrders;
-    });
+      // If it's a hold order or express, it's never standard
+      if (isHoldOrder || isExpressShipping) return false;
 
-    // Hold orders : with source shopify_draft_order
-    const holdOrders = list.records.filter((order) => {
-      return order.source?.toLocaleString().includes('shopify_draft_order');
+      // Prepaid -> must be <= 5000
+      if (isPrepaid && totalAmount > 5000) return false;
+
+      // COD -> any amount is fine
+      return true;
     });
 
     return { express, standard, holdOrders };

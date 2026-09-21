@@ -31,6 +31,7 @@ export const NAV_ITEMS = [
     icon: 'user-x',
     category: 'customer-service',
   },
+
   {
     path: '/blacklisted-orders',
     label: 'Blacklisted Orders',
