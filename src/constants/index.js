@@ -1,5 +1,5 @@
-// export const BASE_URL = 'http://localhost:5000/api/v1';
-export const BASE_URL = 'https://shopify-oms-v2-backend.onrender.com/api/v1';
+export const BASE_URL = 'http://localhost:5000/api/v1';
+// export const BASE_URL = 'https://shopify-oms-v2-backend.onrender.com/api/v1';
 
 // High-value COD threshold used by the upload classifier: a COD order above
 // this amount is held as "pending" (High Value COD reason) instead of being

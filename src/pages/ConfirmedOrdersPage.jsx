@@ -95,7 +95,8 @@ const ConfirmedOrdersPage = () => {
 
     // Hold orders: source contains shopify_draft_order
     const holdOrders = list.records.filter((order) => {
-      return order.source?.toLowerCase().includes('shopify_draft_order');
+      const isExpressShipping = order.shipping_method?.toLowerCase().includes('express');
+      return order.source?.toLowerCase().includes('shopify_draft_order') && !isExpressShipping;
     });
 
     // Standard:

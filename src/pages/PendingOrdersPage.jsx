@@ -82,6 +82,11 @@ const PendingOrdersPage = () => {
       label: 'Order Date',
       render: (r) => new Date(r.order_date).toLocaleDateString(),
     },
+    // {
+    //   key: 'createdAt',
+    //   label: 'Created At',
+    //   render: (r) => (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'N/A'),
+    // },
     {
       key: 'age',
       label: 'Age',

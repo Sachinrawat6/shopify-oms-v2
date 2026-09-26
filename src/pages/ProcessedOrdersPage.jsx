@@ -9,6 +9,18 @@ import StatusBadge from '../components/common/StatusBadge';
 import LoadingState from '../components/common/LoadingState';
 import ErrorState from '../components/common/ErrorState';
 
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return 'N/A';
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
 const columns = [
   { key: 'order_id', label: 'Order ID' },
   { key: 'styleNumber', label: 'Style No.' },
@@ -18,19 +30,20 @@ const columns = [
   { key: 'payment_type', label: 'Payment', render: (r) => <StatusBadge label={r.payment_type} /> },
   { key: 'contact_number', label: 'Contact' },
   {
-    key: 'processed_at',
-    label: 'Processed At',
-    render: (r) => (r.processed_at ? new Date(r.processed_at).toLocaleDateString() : 'N/A'),
+    key: 'createdAt',
+    label: 'Created At',
+    render: (r) => formatDateTime(r.createdAt),
   },
-  {
-    key: 'processed_by',
-    label: 'Processed By',
-    render: (r) => r.processed_by || 'System',
-  },
+  // {
+  //   key: 'order_date',
+  //   label: 'Order Date',
+  //   render: (r) => formatDateTime(r.order_date),
+  // },
 ];
 
 const ProcessedOrdersPage = () => {
   const list = useOrderList('processed');
+  console.log('processed orders ', list);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
